@@ -1,0 +1,9 @@
+pipecat-ai[openai,deepgram,cartesia,silero]
+twilio
+fastapi
+uvicorn[standard]
+python-dotenv
+websockets
+aiohttp
+httpx
+groq
