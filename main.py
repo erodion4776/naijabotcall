@@ -1,5 +1,5 @@
 # ============================================
-# main.py - NAIJASHOP AISHA BOT (FINAL v6)
+# main.py - NAIJASHOP AISHA BOT (FINAL v7)
 # ============================================
 
 import os
@@ -118,7 +118,7 @@ GREETING = (
 async def root():
     return {
         "status": "✅ Naijashop Aisha Bot is running!",
-        "version": "6.0 - Production Ready",
+        "version": "7.0 - Deepgram Fixed",
     }
 
 
@@ -228,23 +228,22 @@ async def websocket_endpoint(websocket: WebSocket):
         ),
     )
 
-    # ✅ STT - Deepgram
-    # CONFIRMED from source: use Settings dataclass NOT live_options dict
+    # ✅ STT - Deepgram FIXED
+    # Removed endpointing and utterance_end_ms
+    # They were causing 400 Bad Request from Deepgram
     stt = DeepgramSTTService(
         api_key=os.getenv("DEEPGRAM_API_KEY"),
-        # Connection-level params passed directly
+        # ✅ Connection-level params - passed directly
         sample_rate=8000,
         encoding="linear16",
         channels=1,
-        # Runtime settings use Settings dataclass
+        # ✅ Runtime settings - only safe confirmed params
         settings=DeepgramSTTService.Settings(
             model="nova-2",
             language="en",
             smart_format=True,
-            endpointing=200,
             interim_results=True,
             punctuate=True,
-            utterance_end_ms=500,
         ),
     )
 
@@ -255,7 +254,6 @@ async def websocket_endpoint(websocket: WebSocket):
     )
 
     # ✅ TTS - Cartesia
-    # CONFIRMED from Cell 30: direct params not output_format dict
     tts = CartesiaTTSService(
         api_key=os.getenv("CARTESIA_API_KEY"),
         voice_id="820a3788-2b37-4d21-847a-b65d8a68c99a",
