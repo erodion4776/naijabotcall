@@ -1,7 +1,7 @@
 import asyncio
 import os
 from fastapi import FastAPI, Request, WebSocket
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from twilio.twiml.voice_response import VoiceResponse, Connect
 from twilio.rest import Client
 
@@ -29,34 +29,56 @@ app = FastAPI()
 
 PUBLIC_URL = os.getenv("RENDER_EXTERNAL_URL", "")
 
-SYSTEM_PROMPT = """You are 'Aisha,' a friendly female voice assistant calling
-for Naijashop.com.ng - a Nigerian business management app.
+# ✅ BETTER NIGERIAN PROMPT
+SYSTEM_PROMPT = """You are 'Aisha,' a sharp and friendly Nigerian
+female sales caller for Naijashop.com.ng.
 
-YOUR GOAL:
-Convince the shop owner to try Naijashop to track their sales and stock
-instead of using paper or notebooks.
+BACKGROUND:
+Naijashop helps Nigerian shop owners track their sales and stock
+on their phone instead of using paper notebooks.
+It costs nothing to start - completely FREE for 30 days.
+
+YOUR PERSONALITY:
+- You sound like a real Nigerian professional
+- You are warm friendly and persuasive
+- You speak simply no big grammar
+- You are confident but not pushy
+- You understand Nigerian shop problems
 
 STRICT RULES:
-- Maximum 1 to 2 SHORT sentences per reply
-- Be natural and conversational
-- Speak like a Nigerian professional
-- Never repeat yourself
-- Answer exactly what they ask directly
-- Do not use big English grammar
-- Do not say things like "I am an AI"
+- Reply in MAXIMUM 1 sentence only
+- Never say I am an AI or I am a bot
+- Never repeat the same thing twice
+- Always respond to exactly what they say
+- Use Nigerian expressions naturally
+- If they speak Pidgin reply in Pidgin
+- Keep pushing towards the goal
 
-CONVERSATION FLOW:
-1. Greet and confirm you are speaking with the shop owner
-2. Introduce Naijashop briefly
-3. Ask how they currently track their stock and sales
-4. Explain how Naijashop solves that problem
-5. Ask if they want to try it free for 30 days"""
+YOUR GOAL:
+Get the shop owner to agree to try
+Naijashop FREE for 30 days
 
-GREETING = "Good day! Am I speaking with the shop owner?"
+CONVERSATION STEPS:
+1. Confirm you are speaking with shop owner
+2. Ask ONE pain point about their tracking method
+3. Show how Naijashop solves that pain
+4. Ask if they want to try FREE for 30 days
+5. If yes tell them to visit naijashop.com.ng
+6. If no ask what their concern is
+7. Handle objection and try to close again
+
+OBJECTIONS:
+- No time → E go save you time just 2 minutes to set up
+- No data → E work offline no need for data always
+- No tech → Na simple as WhatsApp anybody fit use am
+- Not interested → Free trial dey nothing to lose
+- How much → First 30 days na free after that very small"""
+
+GREETING = "Good day! Please am I speaking with the shop owner?"
 
 @app.get("/")
 async def root():
-    return {"status": "✅ Naijashop Aisha Bot is running!"}
+    return {"status": "Naijashop Aisha Bot is running!"}
 
 @app.post("/voice")
 async def voice(request: Request):
@@ -80,12 +102,12 @@ async def make_call(phone_number: str):
             url=f"{PUBLIC_URL}/voice"
         )
         return {
-            "status": "✅ Calling...",
+            "status": "Calling...",
             "calling": phone_number,
             "call_sid": call.sid
         }
     except Exception as e:
-        return {"status": "❌ Error", "detail": str(e)}
+        return {"status": "Error", "detail": str(e)}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -101,10 +123,8 @@ async def websocket_endpoint(websocket: WebSocket):
         if data.get("event") == "start":
             stream_sid = data["start"]["streamSid"]
             call_sid = data["start"]["callSid"]
-            print(f"✅ Stream SID: {stream_sid}")
-            print(f"✅ Call SID  : {call_sid}")
     except Exception as e:
-        print(f"⚠️ Could not get stream_sid: {e}")
+        print(f"Error: {e}")
 
     transport = FastAPIWebsocketTransport(
         websocket=websocket,
@@ -138,6 +158,7 @@ async def websocket_endpoint(websocket: WebSocket):
         ),
     )
 
+    # ✅ FASTER MODEL
     stt = DeepgramSTTService(
         api_key=os.getenv("DEEPGRAM_API_KEY"),
         settings=DeepgramSTTService.Settings(
@@ -153,7 +174,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     llm = GroqLLMService(
         api_key=os.getenv("GROQ_API_KEY"),
-        model="llama-3.3-70b-versatile"
+        model="llama-3.1-8b-instant"  # ✅ Fastest model
     )
 
     tts = CartesiaTTSService(
@@ -186,12 +207,12 @@ async def websocket_endpoint(websocket: WebSocket):
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
-        print("✅ Client connected - sending greeting")
-        await task.queue_frames([TTSSpeakFrame(text=GREETING)])
+        await task.queue_frames([
+            TTSSpeakFrame(text=GREETING)
+        ])
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
-        print("📵 Client disconnected")
         await task.cancel()
 
     runner = PipelineRunner()
