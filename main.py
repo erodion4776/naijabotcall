@@ -1,5 +1,5 @@
 # ============================================
-# main.py - NAIJASHOP AISHA BOT (FINAL v5)
+# main.py - NAIJASHOP AISHA BOT (FINAL v6)
 # ============================================
 
 import os
@@ -23,7 +23,7 @@ from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
 
-# ✅ CONFIRMED CORRECT FROM COLAB CELL 29
+# ✅ CONFIRMED CORRECT FROM COLAB
 from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.aggregators.llm_response_universal import (
     LLMUserAggregator,
@@ -118,7 +118,7 @@ GREETING = (
 async def root():
     return {
         "status": "✅ Naijashop Aisha Bot is running!",
-        "version": "5.0 - Production Ready",
+        "version": "6.0 - Production Ready",
     }
 
 
@@ -170,7 +170,7 @@ async def websocket_endpoint(websocket: WebSocket):
     stream_sid = None
     call_sid = None
 
-    # ✅ Read Twilio start event properly
+    # ✅ Read Twilio start event
     try:
         while True:
             data = await websocket.receive_json()
@@ -229,34 +229,33 @@ async def websocket_endpoint(websocket: WebSocket):
     )
 
     # ✅ STT - Deepgram
-    # CONFIRMED from Cell 30: pass params directly
-    # live_options handles deepgram specific settings
+    # CONFIRMED from source: use Settings dataclass NOT live_options dict
     stt = DeepgramSTTService(
         api_key=os.getenv("DEEPGRAM_API_KEY"),
+        # Connection-level params passed directly
         sample_rate=8000,
         encoding="linear16",
         channels=1,
-        live_options={
-            "model": "nova-2",
-            "language": "en",
-            "smart_format": True,
-            "endpointing": 200,
-            "utterance_end_ms": 500,
-            "interim_results": True,
-            "punctuate": True,
-        },
+        # Runtime settings use Settings dataclass
+        settings=DeepgramSTTService.Settings(
+            model="nova-2",
+            language="en",
+            smart_format=True,
+            endpointing=200,
+            interim_results=True,
+            punctuate=True,
+            utterance_end_ms=500,
+        ),
     )
 
     # ✅ LLM - Groq
-    # CONFIRMED from Cell 30: api_key, model, settings
     llm = GroqLLMService(
         api_key=os.getenv("GROQ_API_KEY"),
         model="llama-3.1-8b-instant",
     )
 
     # ✅ TTS - Cartesia
-    # CONFIRMED from Cell 30: sample_rate, encoding, container
-    # are direct params NOT inside output_format dict
+    # CONFIRMED from Cell 30: direct params not output_format dict
     tts = CartesiaTTSService(
         api_key=os.getenv("CARTESIA_API_KEY"),
         voice_id="820a3788-2b37-4d21-847a-b65d8a68c99a",
@@ -266,7 +265,6 @@ async def websocket_endpoint(websocket: WebSocket):
     )
 
     # ✅ CONTEXT + AGGREGATORS
-    # CONFIRMED from Cell 29
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT}
     ]
@@ -274,15 +272,15 @@ async def websocket_endpoint(websocket: WebSocket):
     user_aggregator = LLMUserAggregator(context)
     assistant_aggregator = LLMAssistantAggregator(context)
 
-    # ✅ PIPELINE - correct order
+    # ✅ PIPELINE
     pipeline = Pipeline([
-        transport.input(),       # Audio in from Twilio
-        stt,                     # Speech → text
-        user_aggregator,         # Add user msg to context
-        llm,                     # Generate AI response
-        tts,                     # Text → speech
-        transport.output(),      # Audio out to Twilio
-        assistant_aggregator,    # Save assistant response
+        transport.input(),
+        stt,
+        user_aggregator,
+        llm,
+        tts,
+        transport.output(),
+        assistant_aggregator,
     ])
 
     # ✅ TASK
@@ -306,6 +304,6 @@ async def websocket_endpoint(websocket: WebSocket):
         print("📵 Call ended")
         await task.cancel()
 
-    # ✅ RUN PIPELINE
+    # ✅ RUN
     runner = PipelineRunner()
     await runner.run(task)
