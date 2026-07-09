@@ -1,5 +1,5 @@
 # ============================================
-# main.py - NAIJASHOP AISHA BOT
+# main.py - NAIJASHOP AISHA BOT (FIXED)
 # ============================================
 
 import asyncio
@@ -17,10 +17,9 @@ from pipecat.serializers.twilio import TwilioFrameSerializer
 from pipecat.services.groq.llm import GroqLLMService
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.cartesia.tts import CartesiaTTSService
-from pipecat.processors.aggregators.llm_context import LLMContext
-from pipecat.processors.aggregators.llm_response_universal import (
-    LLMUserAggregator,
-    LLMAssistantAggregator
+from pipecat.processors.aggregators.openai_llm_context import (
+    OpenAILLMContext,
+    OpenAILLMContextAggregator
 )
 from pipecat.frames.frames import TTSSpeakFrame
 from pipecat.pipeline.pipeline import Pipeline
@@ -29,8 +28,20 @@ from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
 
-app = FastAPI()
+# ✅ Validate environment variables on startup
+required_env_vars = [
+    "GROQ_API_KEY",
+    "DEEPGRAM_API_KEY",
+    "CARTESIA_API_KEY",
+    "TWILIO_ACCOUNT_SID",
+    "TWILIO_AUTH_TOKEN",
+    "TWILIO_PHONE_NUMBER"
+]
+for var in required_env_vars:
+    if not os.getenv(var):
+        raise ValueError(f"❌ Missing required environment variable: {var}")
 
+app = FastAPI()
 PUBLIC_URL = os.getenv("RENDER_EXTERNAL_URL", "")
 
 SYSTEM_PROMPT = """You are Aisha, a sharp Nigerian female sales rep 
@@ -88,13 +99,15 @@ HANDLE OBJECTIONS LIKE THIS:
 
 GREETING = "Hello! Na Aisha from Naijashop. Please, na shop owner I dey speak with?"
 
+
 @app.get("/")
 async def root():
     return {
         "status": "✅ Naijashop Aisha Bot is running!",
-        "version": "2.0",
-        "voice": "Tyler - Friendly Salesman"
+        "version": "3.0",
+        "voice": "Aisha - Nigerian Sales Rep"
     }
+
 
 @app.post("/voice")
 async def voice(request: Request):
@@ -107,6 +120,7 @@ async def voice(request: Request):
         content=str(res),
         media_type="application/xml"
     )
+
 
 @app.get("/make-call")
 async def make_call(phone_number: str):
@@ -131,6 +145,7 @@ async def make_call(phone_number: str):
             "detail": str(e)
         }
 
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -138,19 +153,24 @@ async def websocket_endpoint(websocket: WebSocket):
     stream_sid = None
     call_sid = None
 
+    # ✅ Read Twilio start event to get stream/call SIDs
     try:
-        data = await websocket.receive_json()
-        if data.get("event") == "connected":
-            data = await websocket.receive_json()
-        if data.get("event") == "start":
-            stream_sid = data["start"]["streamSid"]
-            call_sid = data["start"]["callSid"]
-            print(f"✅ Stream SID: {stream_sid}")
-            print(f"✅ Call SID  : {call_sid}")
+        async for message in websocket.iter_json():
+            event = message.get("event")
+            if event == "connected":
+                print("📡 Twilio connected")
+                continue
+            if event == "start":
+                stream_sid = message["start"]["streamSid"]
+                call_sid = message["start"]["callSid"]
+                print(f"✅ Stream SID: {stream_sid}")
+                print(f"✅ Call SID  : {call_sid}")
+                break
     except Exception as e:
-        print(f"⚠️ Error: {e}")
+        print(f"⚠️ Error reading start event: {e}")
+        return
 
-    # ✅ TRANSPORT WITH FAST VAD
+    # ✅ Transport
     transport = FastAPIWebsocketTransport(
         websocket=websocket,
         params=FastAPIWebsocketParams(
@@ -183,48 +203,49 @@ async def websocket_endpoint(websocket: WebSocket):
         ),
     )
 
-    # ✅ FAST DEEPGRAM STT
+    # ✅ STT - Deepgram (fixed params)
     stt = DeepgramSTTService(
         api_key=os.getenv("DEEPGRAM_API_KEY"),
-        settings=DeepgramSTTService.Settings(
-            model="nova-2",
-            language="en",
-            smart_format=True,
-            endpointing=200,
-            utterance_end_ms=500,
-            interim_results=True,
-            punctuate=True,
-        )
+        model="nova-2",
+        language="en",
+        smart_format=True,
+        endpointing=200,
+        utterance_end_ms=500,
+        interim_results=True,
+        punctuate=True,
     )
 
-    # ✅ FASTEST GROQ MODEL
+    # ✅ LLM - Groq
     llm = GroqLLMService(
         api_key=os.getenv("GROQ_API_KEY"),
         model="llama-3.1-8b-instant"
     )
 
-    # ✅ TYLER - FRIENDLY SALESMAN VOICE
+    # ✅ TTS - Cartesia (fixed output format)
     tts = CartesiaTTSService(
         api_key=os.getenv("CARTESIA_API_KEY"),
         voice_id="820a3788-2b37-4d21-847a-b65d8a68c99a",
-        sample_rate=8000,
-        encoding="pcm_s16le",
-        container="raw",
+        output_format={
+            "container": "raw",
+            "encoding": "pcm_s16le",
+            "sample_rate": 8000
+        }
     )
 
+    # ✅ Context and aggregators (fixed)
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    context = LLMContext(messages=messages)
-    user_aggregator = LLMUserAggregator(context)
-    assistant_aggregator = LLMAssistantAggregator(context)
+    context = OpenAILLMContext(messages=messages)
+    context_aggregator = llm.create_context_aggregator(context)
 
+    # ✅ Pipeline with correct order
     pipeline = Pipeline([
         transport.input(),
         stt,
-        user_aggregator,
+        context_aggregator.user(),
         llm,
         tts,
         transport.output(),
-        assistant_aggregator,
+        context_aggregator.assistant(),
     ])
 
     task = PipelineTask(
