@@ -1,5 +1,5 @@
 # ============================================
-# main.py - NAIJASHOP AISHA BOT (FINAL v7)
+# main.py - NAIJASHOP AISHA BOT (v8 TURBO)
 # ============================================
 
 import os
@@ -118,7 +118,7 @@ GREETING = (
 async def root():
     return {
         "status": "✅ Naijashop Aisha Bot is running!",
-        "version": "7.0 - Deepgram Fixed",
+        "version": "8.0 - Turbo Response",
     }
 
 
@@ -195,7 +195,7 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"⚠️ Error reading start event: {e}")
         return
 
-    # ✅ TRANSPORT
+    # ✅ TRANSPORT - Turbo VAD Settings
     transport = FastAPIWebsocketTransport(
         websocket=websocket,
         params=FastAPIWebsocketParams(
@@ -209,10 +209,11 @@ async def websocket_endpoint(websocket: WebSocket):
             add_wav_header=False,
             vad_analyzer=SileroVADAnalyzer(
                 params=VADParams(
-                    stop_secs=0.4,
-                    start_secs=0.2,
-                    confidence=0.5,
-                    min_volume=0.3,
+                    # 🚀 FAST RESPONSE - catches short words like "Yes"
+                    stop_secs=0.2,
+                    start_secs=0.1,
+                    confidence=0.4,
+                    min_volume=0.2,
                 )
             ),
             serializer=TwilioFrameSerializer(
@@ -228,16 +229,12 @@ async def websocket_endpoint(websocket: WebSocket):
         ),
     )
 
-    # ✅ STT - Deepgram FIXED
-    # Removed endpointing and utterance_end_ms
-    # They were causing 400 Bad Request from Deepgram
+    # ✅ STT - Deepgram optimized for short replies
     stt = DeepgramSTTService(
         api_key=os.getenv("DEEPGRAM_API_KEY"),
-        # ✅ Connection-level params - passed directly
         sample_rate=8000,
         encoding="linear16",
         channels=1,
-        # ✅ Runtime settings - only safe confirmed params
         settings=DeepgramSTTService.Settings(
             model="nova-2",
             language="en",
@@ -247,7 +244,7 @@ async def websocket_endpoint(websocket: WebSocket):
         ),
     )
 
-    # ✅ LLM - Groq
+    # ✅ LLM - Groq fastest model
     llm = GroqLLMService(
         api_key=os.getenv("GROQ_API_KEY"),
         model="llama-3.1-8b-instant",
@@ -270,15 +267,15 @@ async def websocket_endpoint(websocket: WebSocket):
     user_aggregator = LLMUserAggregator(context)
     assistant_aggregator = LLMAssistantAggregator(context)
 
-    # ✅ PIPELINE
+    # ✅ PIPELINE - assistant_aggregator moved before tts
     pipeline = Pipeline([
         transport.input(),
         stt,
         user_aggregator,
         llm,
+        assistant_aggregator,  # 🚀 Moved up - context updated immediately
         tts,
         transport.output(),
-        assistant_aggregator,
     ])
 
     # ✅ TASK
@@ -299,7 +296,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
-        print("📵 Call ended")
+        print("📵 Call ended by user")
         await task.cancel()
 
     # ✅ RUN
