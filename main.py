@@ -1,5 +1,5 @@
 # ============================================
-# main.py - NAIJASHOP AISHA BOT (v8 TURBO)
+# main.py - NAIJASHOP AISHA BOT (v9 CLEAN)
 # ============================================
 
 import os
@@ -23,7 +23,6 @@ from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
 
-# ✅ CONFIRMED CORRECT FROM COLAB
 from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.aggregators.llm_response_universal import (
     LLMUserAggregator,
@@ -118,7 +117,7 @@ GREETING = (
 async def root():
     return {
         "status": "✅ Naijashop Aisha Bot is running!",
-        "version": "8.0 - Turbo Response",
+        "version": "9.0 - Clean No Warnings",
     }
 
 
@@ -195,7 +194,7 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"⚠️ Error reading start event: {e}")
         return
 
-    # ✅ TRANSPORT - Turbo VAD Settings
+    # ✅ TRANSPORT
     transport = FastAPIWebsocketTransport(
         websocket=websocket,
         params=FastAPIWebsocketParams(
@@ -209,7 +208,6 @@ async def websocket_endpoint(websocket: WebSocket):
             add_wav_header=False,
             vad_analyzer=SileroVADAnalyzer(
                 params=VADParams(
-                    # 🚀 FAST RESPONSE - catches short words like "Yes"
                     stop_secs=0.2,
                     start_secs=0.1,
                     confidence=0.4,
@@ -229,7 +227,7 @@ async def websocket_endpoint(websocket: WebSocket):
         ),
     )
 
-    # ✅ STT - Deepgram optimized for short replies
+    # ✅ STT - Deepgram
     stt = DeepgramSTTService(
         api_key=os.getenv("DEEPGRAM_API_KEY"),
         sample_rate=8000,
@@ -244,19 +242,23 @@ async def websocket_endpoint(websocket: WebSocket):
         ),
     )
 
-    # ✅ LLM - Groq fastest model
+    # ✅ LLM - Groq (deprecation warning fixed)
     llm = GroqLLMService(
         api_key=os.getenv("GROQ_API_KEY"),
-        model="llama-3.1-8b-instant",
+        settings=GroqLLMService.Settings(
+            model="llama-3.1-8b-instant",
+        ),
     )
 
-    # ✅ TTS - Cartesia
+    # ✅ TTS - Cartesia (deprecation warning fixed)
     tts = CartesiaTTSService(
         api_key=os.getenv("CARTESIA_API_KEY"),
-        voice_id="820a3788-2b37-4d21-847a-b65d8a68c99a",
         sample_rate=8000,
         encoding="pcm_s16le",
         container="raw",
+        settings=CartesiaTTSService.Settings(
+            voice="820a3788-2b37-4d21-847a-b65d8a68c99a",
+        ),
     )
 
     # ✅ CONTEXT + AGGREGATORS
@@ -267,13 +269,13 @@ async def websocket_endpoint(websocket: WebSocket):
     user_aggregator = LLMUserAggregator(context)
     assistant_aggregator = LLMAssistantAggregator(context)
 
-    # ✅ PIPELINE - assistant_aggregator moved before tts
+    # ✅ PIPELINE
     pipeline = Pipeline([
         transport.input(),
         stt,
         user_aggregator,
         llm,
-        assistant_aggregator,  # 🚀 Moved up - context updated immediately
+        assistant_aggregator,
         tts,
         transport.output(),
     ])
